@@ -85,7 +85,6 @@
 
 
 ; Show line and column numbers in modeline
-(line-number-mode t)
 (column-number-mode t)
 
 ;; Enable wheelmouse support by default
@@ -97,10 +96,17 @@
 (setq mouse-highlight nil)
 
 (setq-default visible-bell t)
+(setq ring-bell-function
+      (lambda ()
+        (invert-face 'mode-line)
+        (run-with-timer 0.1 nil 'invert-face 'mode-line)))
+
 (blink-cursor-mode -1)
 (setq blink-matching-delay 0.1)
 
+(require 'js2-mode)
 (setq js2-mirror-mode t)
+
 (require 'web-mode)
 (setq web-mode-comment-style 2)
 (setq standard-indent 2)
@@ -111,9 +117,17 @@
 (setq mac-command-modifier 'meta)
 (setq kill-whole-line t)
 
+(require 'yasnippet)
+(add-hook 'prog-mode-hook
+          '(lambda ()
+             (yas-minor-mode)))
+
+(yas/global-mode 1)
+(yas/initialize)
 
 ;; Tab completion
 (setq hippie-expand-try-functions-list (list
+  'yas-hippie-try-expand
   'util-try-expand-hashitems
   'try-expand-dabbrev-visible
   'try-expand-dabbrev
@@ -146,9 +160,8 @@
 
 (add-to-list 'auto-mode-alist '("\\.log\\'" . auto-revert-mode))
 (add-to-list 'auto-mode-alist '("Makefile" . makefile-mode))
-(add-to-list 'auto-mode-alist '("\\.\\(html\\|mustache\\)" . html-mode))
+(add-to-list 'auto-mode-alist '("\\.\\(html\\|mustache\\)" . web-mode))
 (add-to-list 'auto-mode-alist '("\\.js" . js2-mode))
-(add-to-list 'auto-mode-alist '("\\.json" . js2-mode))
 (add-to-list 'auto-mode-alist '("\\.scss" . scss-mode))
 (add-to-list 'auto-mode-alist '("\\.less" . css-mode))
 (add-to-list 'auto-mode-alist '("bashrc" . sh-mode))
@@ -156,7 +169,10 @@
              '("\\.\\(?:gemspec\\|irbrc\\|gemrc\\|rake\\|rb\\|ru\\|thor\\)\\'" . ruby-mode))
 (add-to-list 'auto-mode-alist
              '("\\(Capfile\\|Gemfile\\(?:\\.[a-zA-Z0-9._-]+\\)?\\|[rR]akefile\\)\\'" . ruby-mode))
-
+(add-to-list 'auto-mode-alist '("\\.org" . org-mode))
+(add-to-list 'auto-mode-alist '("\\.md" . markdown-mode))
+(add-to-list 'auto-mode-alist '("\\.json" . json-mode))
+(add-to-list 'auto-mode-alist '("\\.properties" . conf-javaprop-mode))
 
 ; don't iconify on C-z when running in X
 (when window-system (global-set-key "\C-z" 'util-zap-to-char))
@@ -208,6 +224,8 @@
 
 (require 'compile)
 (setq compilation-scroll-output t)
+(add-hook 'compilation-filter-hook 'comint-truncate-buffer)
+(setq comint-buffer-maximum-size 2000)
 (setq compilation-search-path
       (list "~" nil))
 
@@ -251,21 +269,22 @@
 
 (require 'diff-mode)
 (custom-set-faces
-  ;; custom-set-faces was added by Custom -- don't edit or cut/paste it!
-  ;; Your init file should contain only one such instance.
- ;'(default ((t (:stipple nil :background "black" :foreground "white" :inverse-video nil :box nil :strike-through nil :overline nil :underline nil :slant normal :weight normal :width normal :family "default"))))
-  '(font-lock-comment-face ((t (:foreground "chocolate1"))))
-  '(compilation-info ((((class color) (min-colors 88) (background dark)) (:foreground "lightpink" :weight bold :underline nil))))
-  '(cperl-array-face ((t (:foreground "gold"))))
-  '(cperl-hash-face ((t (:foreground "firebrick1"))))
-  '(diff-added-face ((t (:foreground "dark turquoise"))))
-  '(diff-removed-face ((t (:foreground "violet"))))
-  '(diff-refine-change ((t (:background "gray30"))))
-  '(diff-file-header-face ((t (:foreground "firebrick" :weight bold))))
-  '(diff-header-face ((((class color) (background dark)) (:foreground "forest green"))))
-  '(diff-index-face ((t (:inherit diff-file-header-face :underline t))))
-  '(diff-function-face ((t (:inherit diff-context-face :foreground "DarkGoldenrod1"))))
-  '(trailing-whitespace ((((class color) (background dark)) (:background "grey30")))))
+ ;; custom-set-faces was added by Custom.
+ ;; If you edit it by hand, you could mess it up, so be careful.
+ ;; Your init file should contain only one such instance.
+ ;; If there is more than one, they won't work right.
+ '(compilation-info ((((class color) (min-colors 88) (background dark)) (:foreground "lightpink" :weight bold :underline nil))))
+ '(cperl-array-face ((t (:foreground "gold"))))
+ '(cperl-hash-face ((t (:foreground "firebrick1"))))
+ '(diff-added ((t (:foreground "dark turquoise"))))
+ '(diff-file-header ((t (:foreground "firebrick" :weight bold))))
+ '(diff-function ((t (:inherit diff-context-face :foreground "DarkGoldenrod1"))))
+ '(diff-header ((((class color) (background dark)) (:foreground "forest green"))))
+ '(diff-index ((t (:inherit diff-file-header-face :underline t))))
+ '(diff-refine-change ((t (:background "gray30"))))
+ '(diff-removed ((t (:foreground "violet"))))
+ '(font-lock-comment-face ((t (:foreground "chocolate1"))))
+ '(trailing-whitespace ((((class color) (background dark)) (:background "grey30")))))
 
 
 ;; setdefault window size
@@ -290,11 +309,46 @@
 (require 'load-directory)
 (load-directory "~/.elisp")
 
+;;
+;; anything config to locate
+(require 'helm-config)
+
+;;
+;; find files in git project
+(require 'helm-ls-git)
+(require 'expand-region)
+(require 'js2-refactor)
+(require 'multiple-cursors)
+
 (defun eval-region-verbose ()
   (interactive) 
   (eval-region (region-beginning) (region-end)) (deactivate-mark) 
   (message "Region Eval'd"))
 
+(defun git-grep-word-or-region ()
+  (interactive)
+  (helm-git-grep-1 (util-region-or-word)))
+
+(defun split-window-4()
+ "Split window into 4 sub-window"
+ (interactive)
+ (if (= 1 (length (window-list)))
+     (progn (split-window-vertically)
+	    (split-window-horizontally)
+	    (other-window 2)
+	    (split-window-horizontally)
+	    )))
+
+(global-set-key [f4] 'helm-git-grep-at-point)
+(global-set-key [(shift f4)] 'helm-imenu)
+
+(global-set-key (kbd "C->") 'mc/mark-next-like-this)
+(global-set-key (kbd "C-<") 'mc/mark-previous-like-this)
+(global-set-key (kbd "C-c C-<") 'mc/mark-all-like-this)
+
+(global-set-key (kbd "C-=") 'er/expand-region)
+(global-set-key (kbd "C-c C-l") 'helm-ls-git-ls)
+(global-set-key (kbd "C-x 4") 'split-window-4)
 (global-set-key "\C-a" 'util-beginning-or-toindent)
 (global-set-key "\C-e" 'util-ending-or-nextline-end)
 (global-set-key "\C-k" 'util-kill-line-or-region)
@@ -316,25 +370,35 @@
 (global-set-key [(super a) ?a ?h] 'util-apply-hunk)
 (global-set-key [(super a) ?a ?i] 'util-apply-file)
 (global-set-key [(super a) ?c ?m ] 'chmod)
+(global-set-key [(super a) ?c ?l ] 'collapse-list)
 (global-set-key [(super a) ?c ?r ] 'vc-resolve-conflicts)
+(global-set-key [(super a) ?d ?f ] 'delete-this-buffer-and-file)
 (global-set-key [(super a) ?d ?o ] 'util-delete-other-buffers)
+(global-set-key [(super a) ?e ?l ] 'eightyify-list)
 (global-set-key [(super a) ?f ?d ] 'vc-diff)
 (global-set-key [(super a) ?f ?g ] 'util-findgrep)
+(global-set-key [(super a) ?g ?g ] 'helm-git-grep)
 (global-set-key [(super a) ?g ?s ] '(lambda() (interactive) (compile (format "cd %s; git status" (vc-root-or-current-dir)))))
 (global-set-key [(super a) ?k ?o ] 'util-kill-other-buffers)
+(global-set-key [(super a) ?g ?s ] 'magit-status)
+(global-set-key [(super a) ?m ?s ] 'magit-diff-staged)
 (global-set-key [(super a) ?r ?d ] '(lambda() (interactive) (util-save-and-save-some-buffers) (vc-root-diff nil)))
 (global-set-key [(super a) ?p ?x] 'util-pretty-xml)
 (global-set-key [(super a) ?r ?f] 'util-revert-file)
 (global-set-key [(super a) ?r ?h] 'util-revert-hunk)
 (global-set-key [(super a) ?s ?a ] 'vc-annotate)
-(global-set-key [(super a) ?s ?w ] 'split-window-horizontally)
+(global-set-key [(super a) ?s ?w ] '(lambda() (interactive) (split-window-horizontally) (other-window 1)))
+(global-set-key [(super a) ?t ?q ] 'util-toggle-quotes)
 (global-set-key [(super a) ?u ?b] 'util-update-buffers)
 (global-set-key [(super a) ?u ?t] 'untabify)
 (global-set-key [(super a) ?w ?a] 'airmacs-agnostic-warn)
 (global-set-key [(super e)] 'eval-region-verbose)
 (global-set-key [(super shift e)] '(lambda()  (interactive)
                              (eval-region (region-beginning) (region-end)) (deactivate-mark)))
+(global-set-key [(super f)] 'eval-fun)
 (global-set-key [(super k)] 'util-kill-whole-line)
+(global-set-key [(super tab)] 'yas-next-field)
+(global-set-key [C-tab] 'yas-prev-field)
 (global-set-key [C-backspace] 'util-backward-kill-word)
 (global-set-key [C-down] '(lambda () (interactive) (next-line 5)))
 (global-set-key [C-left] 'util-backward-word)
@@ -355,7 +419,7 @@
 (global-set-key [M-s-left] 'util-scootch-left)
 (global-set-key [M-s-right] 'util-scootch-right)
 (global-set-key [M-s-up] 'util-scootch-up)
-(global-set-key [M-up] 'util-goto-matching-char)
+(global-set-key [M-up] '(lambda () (interactive) (util-goto-matching-char t)))
 (global-set-key [down] 'next-line)
 (global-set-key [end]      'util-goto-end)
 (global-set-key [f10] '(lambda () (interactive) (comment-line 'comment-region)))
@@ -376,9 +440,15 @@
 (global-set-key [s-up] '(lambda () (interactive) (copy-from-above-or-below 1)))
 (global-set-key [up] 'previous-line)
 
+(global-set-key [s-kp-4] 'windmove-left) 
+(global-set-key [s-kp-6] 'windmove-right) 
+(global-set-key [s-kp-8] 'windmove-up) 
+(global-set-key [s-kp-2] 'windmove-down)
+
 (defun common-hook ()
   (local-set-key [tab] 'util-indent-region-or-line)
-  (local-set-key [(return)] 'newline-and-indent))
+  (local-set-key [(return)] 'newline-and-indent)
+  (yas-minor-mode))
 
 ;; Lisp specific stuff
 (add-hook 'emacs-lisp-mode-hook 'common-hook)
@@ -392,13 +462,50 @@
 (setq-default js2-highlight-level 3)
 (setq-default indent-tabs-mode nil)
 (make-variable-buffer-local 'tab-width)
+(setq-default js2-show-parse-errors nil)
+(setq-default js2-strict-missing-semi-warning nil)
+(setq-default js2-strict-trailing-comma-warning t)
+(setq-default js2-global-externs '("setTimeout" "clearTimeout" "setInterval" "clearInterval" "console" "JSON" "define" "describe" "beforeEach" "afterEach" "it" "xit" "spyOn" "expect" "jasmine" "runs" "waits" "waitsFor" "xdescribe" "require" "localStorage" "sessionStorage" "Image" "exports" "module"))
+
 (add-hook 'js2-mode-hook
           '(lambda ()
              (tern-mode t)
+             (js2-imenu-extras-mode)
              (modify-syntax-entry ?\_ "w")
              (define-key
                js2-mode-map [tab] 'util-indent-region-or-line)
-             (local-set-key [(return)] 'newline-and-indent)))
+             (local-set-key [(return)] 'newline-and-indent)
+             (local-set-key [(super a) ?e ?f] 'js2r-extract-function)
+             (local-set-key [(super a) ?e ?v] 'js2r-extract-var)
+             (local-set-key [(super a) ?e ?m] 'js2r-extract-method)
+             (local-set-key [(super a) ?i ?p] 'js2r-introduce-parameter)
+             (local-set-key [(super a) ?l ?p] 'js2r-localize-parameter)
+             (local-set-key [(super a) ?c ?o] 'js2r-contract-object)
+             (local-set-key [(super a) ?x ?a] 'js2r-expand-array)
+             (local-set-key [(super a) ?x ?f] 'js2r-expand-function)
+             (local-set-key [(super a) ?c ?f] 'js2r-contract-function)
+             (local-set-key [(super a) ?c ?o] 'js2r-contract-object)
+             (local-set-key [(super a) ?i ?v] 'js2r-inline-var)
+             (local-set-key [(super a) ?r ?v] 'js2r-rename-var)
+             (local-set-key [(super a) ?v ?t] 'js2r-var-to-this)
+             (local-set-key [(super a) ?a ?o] 'js2r-arguments-to-object)
+             (local-set-key [(super a) ?3 ?i] 'js2r-ternary-to-if)
+             (local-set-key [(super a) ?s ?v] 'js2r-split-var-declaration)
+             (local-set-key [(super a) ?s ?s] 'js2r-split-string)
+             (local-set-key [(super a) ?u ?w] 'js2r-unwrap)
+             (local-set-key [(super a) ?l ?t] 'js2r-log-this)
+             (local-set-key [(super a) ?s ?l] 'js2r-forward-slurp)
+             (local-set-key [(super a) ?b ?a] 'js2r-forward-barf)
+             (local-set-key [(super a) ?k] 'js2r-kill)
+             ))
+
+(add-hook 'java-mode-hook
+          '(lambda ()
+            (progn
+              (message "java-mode")
+              (setq c-basic-offset 2
+                    tab-width 2
+                    indent-tabs-mode t))))
 
 ;; css mode
 (add-hook 'css-mode-hook 'common-hook)
@@ -418,24 +525,34 @@
 
 (add-hook 'python-mode-hook 'common-hook)
 
-(util-populate-hash
- util-tab-completions
- '(("" 'nil)
-   ("/*" ("/**\n *\n */"))
-   ("**" ("**\n *"))
-   ("\n *" ("\n *\n *"))
-
-   ("fun" (lambda () (insert-if-js2 "function(){ }")))
-   ("try" (lambda () (insert-if-js2 "try { } catch () { }")))
-   ("*@p" (lambda () (insert-if-js2 "* @param {} .")))
-   ("*@r" (lambda () (insert-if-js2 "* @return {} .")))
-   ("*@t" (lambda () (insert-if-js2 "/** @type {} */")))
-   ("*@c" (lambda () (insert-if-js2 "/** @const */")))
-   ("con" (lambda () (insert-if-js2 "console.log()")))
-   ("wcl" (lambda () (insert-if-js2 "window.console.log()")))
-   ))
-
-
 (setenv "NODE_PATH" "/usr/local/lib/node_modules/")
+
+;; make sure compilation buffers show colorz!
+(require 'ansi-color)
+(defun colorize-compilation-buffer ()
+  (toggle-read-only)
+  (ansi-color-apply-on-region (point-min) (point-max))
+  (toggle-read-only))
+(add-hook 'compilation-filter-hook 'colorize-compilation-buffer)
+
+(add-hook 'term-mode-hook (lambda()
+                (yas-minor-mode -1)))
+(add-hook 'prog-mode-hook 'yas-minor-mode)
+(add-hook 'ess-mode-hook 'yas-minor-mode)
+(add-hook 'markdown-mode-hook 'yas-minor-mode)  
+
+(custom-set-variables
+ ;; custom-set-variables was added by Custom.
+ ;; If you edit it by hand, you could mess it up, so be careful.
+ ;; Your init file should contain only one such instance.
+ ;; If there is more than one, they won't work right.
+ '(web-mode-attr-indent-offset 2)
+ '(web-mode-code-indent-offset 2)
+ '(web-mode-css-indent-offset 2)
+ '(web-mode-markup-indent-offset 2)
+ '(web-mode-sql-indent-offset 2))
+
+(add-hook 'conf-javaprop-mode-hook 
+          '(lambda () (conf-quote-normal nil)))
 
 (message "Done loading airmacs")

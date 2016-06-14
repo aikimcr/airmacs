@@ -126,6 +126,23 @@
         standard-output
       (util-shell-function cmd "stdout" 't))))
 
+(defun eval-fun()
+  "Looks for the above defun, then evaluates the function"
+  (interactive)
+  (save-excursion
+    (search-backward-regexp "^\(defun")
+    (let ((line (current-line)))
+      (string-match "defun \\([^(]+\\)" line)
+      (message (format "evaling function: '%s'" (match-string 1 line))))
+    
+    (set-mark (point))
+    (util-goto-matching-char)
+    (forward-char)
+    (eval-region (region-beginning) (region-end))
+    (deactivate-mark)
+    ))
+  
+
 (defun util-select-empty-output-buffer (buffername)
   (switch-to-buffer (get-buffer-create buffername))
   (util-erase-buffer))
@@ -181,6 +198,7 @@
     ))
 
 (defun util-save-and-save-some-buffers ()
+  (interactive)
   (if (buffer-file-name) (save-buffer))
   (save-some-buffers))
 
@@ -504,18 +522,23 @@ The characters copied are inserted in the buffer before point."
           (progn
             (forward-char 1)
             (search-forward-regexp regexp)
-            (backward-char 1)))
+            (backward-char 1)
+            ))
         (if (not (equal (face-at-point) myface)) 'nil
           (if (string= (current-char) matchchar)
               (setq count (1- count))
-            (if (= count 0) (progn (setq pos (point)))
-              (setq count (1+ count))))))
+            (if (= count 0) (setq pos (point))
+              (setq count (1+ count))))
+          (if (string= matchchar closechar)
+              (setq pos (point))
+            )
+          ))
       pos
       )))
 
-(defun util-find-matching-position ()
+(defun util-find-matching-position (&optional opt-backward)
   (save-excursion
-    (let ((matchchar (current-char)) closechar backward pos)
+    (let ((matchchar (current-char)) closechar (backward opt-backward) pos)
       (when (string= matchchar "(") (setq closechar ")"))
       (when (string= matchchar ")") (setq closechar "(") (setq backward 't))
       (when (string= matchchar "[") (setq closechar "]"))
@@ -524,14 +547,17 @@ The characters copied are inserted in the buffer before point."
       (when (string= matchchar "}") (setq closechar "{") (setq backward 't))
       (when (string= matchchar "<") (setq closechar ">"))
       (when (string= matchchar ">") (setq closechar "<") (setq backward 't))
-      (if (not closechar) (error "Not on a blinkable char, try one of '(){}[]<>'"))
+      (when (string= matchchar "/") (setq closechar "/"))
+      (when (string= matchchar "\"") (setq closechar "\""))
+      (when (string= matchchar "\'") (setq closechar "\'"))
+      (if (not closechar) (error "Not on a blinkable char, try one of '(){}[]<>/\'\"'"))
       (condition-case nil
           (util-matching-char-position matchchar closechar backward)
         (error (error "Couldn't find matching '%s'." closechar))))))
 
-(defun util-goto-matching-char ()
+(defun util-goto-matching-char (&optional opt-backward)
   (interactive)
-  (let ((pos (util-find-matching-position)))
+  (let ((pos (util-find-matching-position opt-backward)))
     (goto-char pos)))
 
 (defun util-blink-matching-char ()
@@ -600,6 +626,12 @@ The characters copied are inserted in the buffer before point."
       (set-buffer-modified-p 't)
       (save-buffer))))
 
+(defun chomp (str)
+      "Chomp leading and tailing whitespace from STR."
+      (while (string-match "\\`\n+\\|^\\s-+\\|\\s-+$\\|\n+\\'"
+                           str)
+        (setq str (replace-match "" t t str)))
+      str)
 
 (defun util-update-buffers ()
   "Refreshs all open buffers from their respective files"
@@ -927,15 +959,15 @@ If the current file doesn't exist yet the buffer is saved to create it."
   (set-file-modes (buffer-file-name) (string-to-number mode 8))
   (message (format "File permission set to %s" mode)))
 
-(defun util-custom-compile (cmd compile-name &optional protect)
+(defun util-custom-compile (cmd custom-compile-name &optional protect)
   "Run a custom compile command in a custom buffer"
   (util-save-and-save-some-buffers)
   (let ((mybuf (current-buffer)))
-    (if (get-buffer compile-name)
-        (kill-buffer compile-name))
+    (if (get-buffer custom-compile-name)
+        (kill-buffer custom-compile-name))
     (compile cmd)
     (switch-to-buffer "*compilation*")
-    (rename-buffer compile-name)
+    (rename-buffer custom-compile-name)
     (switch-to-buffer mybuf)
     ))
 
@@ -944,3 +976,117 @@ If the current file doesn't exist yet the buffer is saved to create it."
   (interactive)
   (setq buffer-display-table (make-display-table))
   (aset buffer-display-table ?\^M []))
+
+(defun indent-then-insert (to-insert)
+  "indent then insert"
+  (indent-according-to-mode) (insert to-insert))
+
+
+(defun insert-then-indent (to-insert)
+  "insert then indent"
+  (insert to-insert) (indent-according-to-mode))
+
+(defun insert-multiline-js-comment ()
+  "/** * */"
+  (interactive)
+  (beginning-of-line)
+  (indent-then-insert "/**\n")
+  (indent-then-insert "*\n")
+  (indent-then-insert "*/"))
+
+(defun util-region-or-word ()
+  "Current word or region"
+  (if (not mark-active)
+      (current-word)
+    (buffer-substring (region-beginning) (region-end))
+    ))
+
+(defun delete-this-buffer-and-file ()
+  "Removes file connected to current buffer and kills buffer."
+  (interactive)
+  (let ((filename (buffer-file-name))
+        (buffer (current-buffer))
+        (name (buffer-name)))
+    (if (not (and filename (file-exists-p filename)))
+        (error "Buffer '%s' is not visiting a file!" name)
+      (when (yes-or-no-p "Are you sure you want to remove this file? ")
+        (delete-file filename)
+        (kill-buffer buffer)
+        (message "File '%s' successfully removed" filename)))))
+
+(defun sort-lines-nocase ()
+  "Sorts case insensitive"
+  (interactive)
+  (let ((sort-fold-case t))
+    (call-interactively 'sort-lines)))
+
+(defun zap-backward-whitespace ()
+  "Deletes any whitespace to the left of the cursor"
+  (interactive)
+  (backward-char 1)
+  (let ((delete-count 0))
+    (while (looking-at " \\|\n")
+      (progn
+        (delete-forward-char 1)
+        (backward-char 1)
+        (setq delete-count (+ 1 delete-count))))
+    delete-count))
+
+(defun collapse-list ()
+  "Take a comma separated list and remove all special newlines/whitespace/tabs around commas"
+  (interactive)
+  (save-excursion
+    (er/mark-outside-pairs)
+    (set-mark-command t)
+    (backward-char)
+    (save-excursion
+      (if (looking-at "\\]\\|)") ;; if i'm looking at a list
+          (let ((end-point (point))
+                (end-char (current-char)))
+            (er/mark-outside-pairs)
+            (deactivate-mark)
+            (forward-char)
+            (setq end-point (- end-point (zap-forward-whitespace)))
+            (while (<= (point) end-point)
+              (progn
+                (search-forward-regexp ",")
+                (setq end-point (+ (- end-point (zap-forward-whitespace)) 1))
+                (insert " "))))))
+    (zap-backward-whitespace)))
+
+(defun go-to-80-spot ()
+  "Goes to the 80 spot of a line, or the end of the line"
+  (interactive)
+  (beginning-of-line)
+  (let ((startpoint (point)) (endpoint) (difference))
+    (end-of-line)
+    (setq endpoint (point))
+    (setq difference (- (- endpoint startpoint) 80))
+    (if (> difference 0)
+        (backward-char difference)
+      )))
+
+(defun eightyify-list ()
+  "Convert a comma separated list into lines not much longer than 80 characters"
+  (interactive)
+  (save-excursion
+    (collapse-list)
+    (er/mark-outside-pairs)
+    (set-mark-command t)
+    (backward-char)
+    (if (looking-at "\\]\\|)") ;; if i'm looking at a list
+        (let ((end-point (point)))
+          (er/mark-outside-pairs)
+          (deactivate-mark)
+          (forward-char)
+          (insert-then-indent "\n")
+          (go-to-80-spot)
+          (while (<= (point) end-point)
+            (progn
+              (search-forward-regexp ",")
+              (forward-char)
+              (insert-then-indent "\n")
+              (go-to-80-spot)))
+          (search-forward-regexp "\\]\\|)")
+          (backward-char)
+          (insert-then-indent "\n")))))
